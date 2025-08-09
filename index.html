@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>출석 체크 앱</title>
+    <title>출석 체크 앱 (오프라인 버전)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
@@ -24,19 +24,6 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #555;
         }
-        /* 로딩 스피너 */
-        .loader {
-            border: 4px solid #f3f3f3;
-            border-radius: 50%;
-            border-top: 4px solid #3498db;
-            width: 40px;
-            height: 40px;
-            animation: spin 2s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
         .sort-btn {
             cursor: pointer;
             user-select: none;
@@ -45,16 +32,11 @@
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
 
-    <div id="loading-overlay" class="fixed inset-0 bg-white bg-opacity-75 flex flex-col items-center justify-center z-50">
-        <div class="loader"></div>
-        <p class="mt-4 text-gray-600">데이터를 불러오는 중...</p>
-    </div>
-
     <div class="w-full max-w-lg mx-auto bg-white rounded-2xl shadow-lg p-6 space-y-6">
         <!-- 앱 제목 -->
         <header class="text-center">
             <h1 class="text-2xl font-bold text-gray-800">간편 출석체크</h1>
-            <p class="text-sm text-gray-500">교외 활동용 출석 확인</p>
+            <p class="text-sm text-gray-500">오프라인 버전 (데이터 저장 안됨)</p>
         </header>
 
         <!-- 초기 설정 화면 -->
@@ -109,7 +91,7 @@
         <div class="bg-white p-5 rounded-lg shadow-xl m-4 max-w-sm w-full">
             <div class="text-center">
                 <h3 class="text-lg font-medium leading-6 text-gray-900">정말 초기화하시겠습니까?</h3>
-                <div class="mt-2 px-7 py-3"><p class="text-sm text-gray-500">현재 출석 정보가 모두 삭제되고, 새 명단을 입력하는 화면으로 돌아갑니다.</p></div>
+                <div class="mt-2 px-7 py-3"><p class="text-sm text-gray-500">현재 출석 정보가 모두 삭제됩니다.</p></div>
                 <div class="items-center px-4 py-3 flex justify-center gap-4">
                     <button id="confirm-reset-btn" class="px-4 py-2 bg-red-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300">초기화</button>
                     <button id="cancel-reset-btn" class="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md w-full shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300">취소</button>
@@ -118,23 +100,8 @@
         </div>
     </div>
 
-    <script type="module">
-        // Firebase SDK 가져오기
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Firebase 설정
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-attendance-app';
-
-        // Firebase 앱 초기화
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
+    <script>
         // UI 요소
-        const loadingOverlay = document.getElementById('loading-overlay');
         const setupScreen = document.getElementById('setup-screen');
         const mainScreen = document.getElementById('main-screen');
         const studentNamesInput = document.getElementById('student-names');
@@ -154,66 +121,33 @@
         const nameSortIndicator = document.getElementById('name-sort-indicator');
         const statusSortIndicator = document.getElementById('status-sort-indicator');
         
-        let currentUserId = null;
-        let attendanceDocRef = null;
-        let unsubscribe = null;
+        // 데이터 저장을 위한 지역 변수
         let currentStudents = [];
         let sortKey = 'name';
         let sortDirection = 'asc';
-        let isAuthReady = false;
-
-        // 사용자 인증
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                if (!isAuthReady) {
-                    currentUserId = user.uid;
-                    attendanceDocRef = doc(db, 'artifacts', appId, 'users', currentUserId, 'attendance', 'data');
-                    listenForData();
-                    isAuthReady = true;
-                }
-            } else {
-                signInAnonymously(auth).catch(console.error);
-            }
-        });
-        
-        // 데이터 변경 감지
-        function listenForData() {
-            if (unsubscribe) unsubscribe();
-            unsubscribe = onSnapshot(attendanceDocRef, (docSnap) => {
-                loadingOverlay.classList.add('hidden');
-                if (docSnap.exists()) {
-                    currentStudents = docSnap.data().students || [];
-                    renderMainScreen();
-                } else {
-                    currentStudents = [];
-                    renderSetupScreen();
-                }
-            }, (error) => {
-                console.error("데이터 수신 오류:", error);
-            });
-        }
 
         // 초기 설정 화면 렌더링
         function renderSetupScreen() {
             mainScreen.classList.add('hidden');
             setupScreen.classList.remove('hidden');
             studentNamesInput.value = '';
+            currentStudents = [];
         }
 
         // 메인 화면 렌더링
         function renderMainScreen() {
             setupScreen.classList.add('hidden');
             mainScreen.classList.remove('hidden');
-            updateDashboard(currentStudents);
+            updateDashboard();
             renderStudentList();
         }
 
         // 대시보드 업데이트
-        function updateDashboard(students) {
-            totalStudentsEl.textContent = students.length;
-            presentStudentsEl.textContent = students.filter(s => s.status === 'present').length;
-            absentStudentsEl.textContent = students.filter(s => s.status === 'absent').length;
-            unknownStudentsEl.textContent = students.filter(s => s.status !== 'present' && s.status !== 'absent').length;
+        function updateDashboard() {
+            totalStudentsEl.textContent = currentStudents.length;
+            presentStudentsEl.textContent = currentStudents.filter(s => s.status === 'present').length;
+            absentStudentsEl.textContent = currentStudents.filter(s => s.status === 'absent').length;
+            unknownStudentsEl.textContent = currentStudents.filter(s => s.status !== 'present' && s.status !== 'absent').length;
         }
         
         // 학생 목록 렌더링
@@ -239,13 +173,13 @@
                 return;
             }
 
-            sortedStudents.forEach((student) => {
-                const originalIndex = currentStudents.findIndex(s => s.name === student.name);
+            sortedStudents.forEach((student, sortedIndex) => {
+                const originalIndex = currentStudents.findIndex(s => s.id === student.id);
                 const studentRow = document.createElement('div');
                 const statusStyles = {
                     present: { bg: 'bg-green-50', text: 'text-green-800', btn: 'bg-green-500 hover:bg-green-600', label: '출석' },
                     absent: { bg: 'bg-red-50', text: 'text-red-800', btn: 'bg-red-500 hover:bg-red-600', label: '결석' },
-                    unknown: { bg: 'bg-gray-100', text: 'text-gray-800', btn: 'bg-gray-400 hover:bg-gray-500', label: '모름' }
+                    unknown: { bg: 'bg-gray-100', text: 'text-gray-800', btn: 'bg-gray-400 hover:bg-gray-500', label: '미확인' }
                 };
                 const style = statusStyles[student.status] || statusStyles.unknown;
 
@@ -263,6 +197,7 @@
             });
         }
 
+        // 이벤트 위임 사용
         studentListContainer.addEventListener('click', (e) => {
             if (e.target.tagName === 'BUTTON') {
                 toggleAttendanceStatus(parseInt(e.target.dataset.index));
@@ -275,49 +210,33 @@
             }
         }, true);
 
+        // 출석 상태 변경
         function toggleAttendanceStatus(index) {
-            const updatedStudents = [...currentStudents];
-            const currentStatus = updatedStudents[index].status;
+            const currentStatus = currentStudents[index].status;
             const nextStatus = { 'unknown': 'present', 'present': 'absent', 'absent': 'unknown' }[currentStatus] || 'unknown';
-            updatedStudents[index].status = nextStatus;
-            updateFirestore(updatedStudents);
+            currentStudents[index].status = nextStatus;
+            renderMainScreen(); // UI 다시 그리기
         }
 
+        // 메모 업데이트
         function updateMemo(index, memo) {
-            const updatedStudents = [...currentStudents];
-            if (updatedStudents[index].memo !== memo) {
-                updatedStudents[index].memo = memo;
-                updateFirestore(updatedStudents);
-            }
+            currentStudents[index].memo = memo;
+            // blur 이벤트는 UI를 다시 그릴 필요 없음
         }
         
-        // Firestore 데이터 업데이트 (리스너 분리/재연결로 안정성 확보)
-        async function updateFirestore(students) {
-            if (unsubscribe) {
-                unsubscribe();
-                unsubscribe = null;
-            }
-            try {
-                await setDoc(attendanceDocRef, { students });
-            } catch (error) {
-                console.error("데이터 업데이트 실패:", error);
-                alert("업데이트에 실패했습니다. 잠시 후 다시 시도해주세요.");
-            } finally {
-                listenForData();
-            }
-        }
-
-        startBtn.addEventListener('click', async () => {
+        // 출석체크 시작
+        startBtn.addEventListener('click', () => {
             const names = studentNamesInput.value.split('\n').map(name => name.trim()).filter(name => name);
             if (names.length === 0) {
                 alert('학생 이름을 한 명 이상 입력해주세요.');
                 return;
             }
-            const students = names.map(name => ({ name: name, status: 'unknown', memo: '' }));
-            loadingOverlay.classList.remove('hidden');
-            await updateFirestore(students);
+            // 각 학생에게 고유 ID 부여
+            currentStudents = names.map((name, index) => ({ id: index, name: name, status: 'unknown', memo: '' }));
+            renderMainScreen();
         });
         
+        // 기록 복사
         copyBtn.addEventListener('click', () => {
             const presentList = [], absentList = [], unknownList = [];
             currentStudents.forEach(student => {
@@ -356,6 +275,7 @@
             }
         });
 
+        // 정렬 버튼 이벤트
         function handleSort(key) {
             if (sortKey === key) {
                 sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
@@ -368,19 +288,12 @@
         sortByNameBtn.addEventListener('click', () => handleSort('name'));
         sortByStatusBtn.addEventListener('click', () => handleSort('status'));
 
+        // 초기화
         resetBtn.addEventListener('click', () => resetModal.classList.remove('hidden'));
         cancelResetBtn.addEventListener('click', () => resetModal.classList.add('hidden'));
-        confirmResetBtn.addEventListener('click', async () => {
+        confirmResetBtn.addEventListener('click', () => {
             resetModal.classList.add('hidden');
-            loadingOverlay.classList.remove('hidden');
-            try {
-                await deleteDoc(attendanceDocRef);
-            } catch (error) {
-                console.error("초기화 실패:", error);
-                alert("초기화에 실패했습니다.");
-            } finally {
-                loadingOverlay.classList.add('hidden');
-            }
+            renderSetupScreen();
         });
     </script>
 </body>
