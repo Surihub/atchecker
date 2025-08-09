@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>출석 체크 앱 (오프라인 버전)</title>
+    <title>얘들아 왔니?</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
@@ -28,6 +28,12 @@
             cursor: pointer;
             user-select: none;
         }
+        details > summary {
+            list-style: none;
+        }
+        details > summary::-webkit-details-marker {
+            display: none;
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
@@ -35,9 +41,25 @@
     <div class="w-full max-w-lg mx-auto bg-white rounded-2xl shadow-lg p-6 space-y-6">
         <!-- 앱 제목 -->
         <header class="text-center">
-            <h1 class="text-2xl font-bold text-gray-800">간편 출석체크</h1>
-            <p class="text-sm text-gray-500">오프라인 버전 (데이터 저장 안됨)</p>
+            <h1 class="text-3xl font-bold text-gray-800">얘들아 왔니?</h1>
+            <p class="text-sm text-gray-500">종이출석부가 없을 때, 빠른 학생 출석체크</p>
         </header>
+
+        <!-- 사용설명서 -->
+        <details class="bg-gray-50 rounded-lg">
+            <summary class="cursor-pointer p-3 font-semibold text-gray-700">
+                사용설명서 보기
+            </summary>
+            <div class="p-4 border-t border-gray-200 text-sm text-gray-600 space-y-2">
+                <p>1. **명단 입력:** 아래 입력칸에 학생 이름을 한 줄에 한 명씩 넣고 '시작' 버튼을 누르세요.</p>
+                <p>2. **출석 체크:** 학생의 '미확인' 버튼을 누르면 '출석' → '결석' → '미확인' 순으로 상태가 바뀝니다.</p>
+                <p>3. **메모:** 학생 이름을 클릭하면 메모를 추가하거나 수정할 수 있습니다. (메모가 있으면 📝 아이콘이 표시됩니다.)</p>
+                <p>4. **정렬:** '이름' 또는 '현황' 헤더를 클릭하여 목록을 정렬할 수 있습니다.</p>
+                <p>5. **복사/초기화:** 하단 버튼으로 전체 기록을 복사하거나, 처음부터 다시 시작할 수 있습니다.</p>
+                <p class="font-bold text-red-500">※ 주의: 이 버전은 데이터를 저장하지 않습니다. 새로고침하면 모든 내용이 사라집니다.</p>
+            </div>
+        </details>
+
 
         <!-- 초기 설정 화면 -->
         <div id="setup-screen">
@@ -62,15 +84,14 @@
 
             <!-- 정렬 헤더 -->
             <div class="flex items-center text-sm font-semibold text-gray-600 px-3 py-2 border-b-2">
-                <div id="sort-by-name" class="sort-btn flex items-center basis-2/5">
+                <div id="sort-by-name" class="sort-btn flex items-center basis-1/2">
                     <span>이름</span>
                     <span id="name-sort-indicator" class="ml-1"></span>
                 </div>
-                <div id="sort-by-status" class="sort-btn flex items-center basis-2/5 justify-center">
+                <div id="sort-by-status" class="sort-btn flex items-center basis-1/2 justify-center">
                     <span>현황</span>
                     <span id="status-sort-indicator" class="ml-1"></span>
                 </div>
-                <div class="basis-1/5 text-center">메모</div>
             </div>
 
             <!-- 학생 명단 -->
@@ -84,6 +105,11 @@
                 <button id="reset-btn" class="w-full bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition">초기화</button>
             </div>
         </div>
+
+        <!-- 제작자 Footer -->
+        <footer class="text-center border-t border-gray-200 pt-4">
+            <p class="text-xs text-gray-400">Created by sbh</p>
+        </footer>
     </div>
     
     <!-- 초기화 확인 모달 -->
@@ -99,6 +125,19 @@
             </div>
         </div>
     </div>
+
+    <!-- 메모 수정 모달 -->
+    <div id="memo-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-30">
+        <div class="bg-white p-5 rounded-lg shadow-xl m-4 max-w-sm w-full space-y-4">
+            <h3 id="memo-student-name" class="text-lg font-medium leading-6 text-gray-900"></h3>
+            <textarea id="memo-input" rows="4" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+            <div class="flex justify-end gap-3">
+                <button id="cancel-memo-btn" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">취소</button>
+                <button id="save-memo-btn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">저장</button>
+            </div>
+        </div>
+    </div>
+
 
     <script>
         // UI 요소
@@ -120,11 +159,17 @@
         const sortByStatusBtn = document.getElementById('sort-by-status');
         const nameSortIndicator = document.getElementById('name-sort-indicator');
         const statusSortIndicator = document.getElementById('status-sort-indicator');
+        const memoModal = document.getElementById('memo-modal');
+        const memoStudentName = document.getElementById('memo-student-name');
+        const memoInput = document.getElementById('memo-input');
+        const saveMemoBtn = document.getElementById('save-memo-btn');
+        const cancelMemoBtn = document.getElementById('cancel-memo-btn');
         
         // 데이터 저장을 위한 지역 변수
         let currentStudents = [];
         let sortKey = 'name';
         let sortDirection = 'asc';
+        let currentlyEditingMemoIndex = -1;
 
         // 초기 설정 화면 렌더링
         function renderSetupScreen() {
@@ -173,25 +218,24 @@
                 return;
             }
 
-            sortedStudents.forEach((student, sortedIndex) => {
+            sortedStudents.forEach((student) => {
                 const originalIndex = currentStudents.findIndex(s => s.id === student.id);
                 const studentRow = document.createElement('div');
                 const statusStyles = {
-                    present: { bg: 'bg-green-50', text: 'text-green-800', btn: 'bg-green-500 hover:bg-green-600', label: '출석' },
-                    absent: { bg: 'bg-red-50', text: 'text-red-800', btn: 'bg-red-500 hover:bg-red-600', label: '결석' },
-                    unknown: { bg: 'bg-gray-100', text: 'text-gray-800', btn: 'bg-gray-400 hover:bg-gray-500', label: '미확인' }
+                    present: { bg: 'bg-green-100', text: 'text-green-900', btn: 'bg-green-600 hover:bg-green-700 shadow-md', label: '✅ 출석' },
+                    absent: { bg: 'bg-red-100', text: 'text-red-900', btn: 'bg-red-600 hover:bg-red-700 shadow-md', label: '❌ 결석' },
+                    unknown: { bg: 'bg-gray-200', text: 'text-gray-900', btn: 'bg-gray-500 hover:bg-gray-600 shadow-md', label: '❔ 미확인' }
                 };
                 const style = statusStyles[student.status] || statusStyles.unknown;
 
                 studentRow.className = `flex items-center p-2 rounded-lg transition-colors ${style.bg}`;
                 studentRow.innerHTML = `
-                    <span class="basis-2/5 font-medium truncate pr-2 ${style.text}">${student.name}</span>
-                    <button class="basis-2/5 px-2 py-1 text-sm font-semibold rounded-full text-white transition ${style.btn}" data-index="${originalIndex}">
+                    <span class="basis-1/2 font-medium truncate pr-2 cursor-pointer student-name ${style.text}" data-index="${originalIndex}">
+                        ${student.name} ${student.memo ? '📝' : ''}
+                    </span>
+                    <button class="basis-1/2 px-2 py-1.5 text-sm font-bold rounded-full text-white transition status-btn ${style.btn}" data-index="${originalIndex}">
                         ${style.label}
                     </button>
-                    <input type="text" placeholder="메모..." value="${student.memo || ''}" 
-                           class="basis-1/5 ml-2 p-1 text-sm border border-gray-200 rounded-md focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
-                           data-index="${originalIndex}">
                 `;
                 studentListContainer.appendChild(studentRow);
             });
@@ -199,30 +243,48 @@
 
         // 이벤트 위임 사용
         studentListContainer.addEventListener('click', (e) => {
-            if (e.target.tagName === 'BUTTON') {
-                toggleAttendanceStatus(parseInt(e.target.dataset.index));
+            const target = e.target;
+            if (target.classList.contains('status-btn')) {
+                toggleAttendanceStatus(parseInt(target.dataset.index));
+            } else if (target.classList.contains('student-name')) {
+                openMemoModal(parseInt(target.dataset.index));
             }
         });
-
-        studentListContainer.addEventListener('blur', (e) => {
-            if (e.target.tagName === 'INPUT') {
-                updateMemo(parseInt(e.target.dataset.index), e.target.value);
-            }
-        }, true);
 
         // 출석 상태 변경
         function toggleAttendanceStatus(index) {
             const currentStatus = currentStudents[index].status;
             const nextStatus = { 'unknown': 'present', 'present': 'absent', 'absent': 'unknown' }[currentStatus] || 'unknown';
             currentStudents[index].status = nextStatus;
-            renderMainScreen(); // UI 다시 그리기
+            renderMainScreen();
         }
 
-        // 메모 업데이트
-        function updateMemo(index, memo) {
-            currentStudents[index].memo = memo;
-            // blur 이벤트는 UI를 다시 그릴 필요 없음
+        // 메모 모달 열기
+        function openMemoModal(index) {
+            currentlyEditingMemoIndex = index;
+            const student = currentStudents[index];
+            memoStudentName.textContent = `${student.name} - 메모`;
+            memoInput.value = student.memo || '';
+            memoModal.classList.remove('hidden');
+            memoInput.focus();
         }
+
+        // 메모 모달 닫기
+        function closeMemoModal() {
+            memoModal.classList.add('hidden');
+            currentlyEditingMemoIndex = -1;
+        }
+
+        // 메모 저장
+        saveMemoBtn.addEventListener('click', () => {
+            if (currentlyEditingMemoIndex > -1) {
+                currentStudents[currentlyEditingMemoIndex].memo = memoInput.value;
+                closeMemoModal();
+                renderStudentList(); // 메모 아이콘 갱신을 위해 목록 다시 그리기
+            }
+        });
+
+        cancelMemoBtn.addEventListener('click', closeMemoModal);
         
         // 출석체크 시작
         startBtn.addEventListener('click', () => {
@@ -231,7 +293,6 @@
                 alert('학생 이름을 한 명 이상 입력해주세요.');
                 return;
             }
-            // 각 학생에게 고유 ID 부여
             currentStudents = names.map((name, index) => ({ id: index, name: name, status: 'unknown', memo: '' }));
             renderMainScreen();
         });
