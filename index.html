@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>출석 체크 앱</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+        }
+        /* 스크롤바 디자인 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        /* 로딩 스피너 */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 4px solid #3498db;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .sort-btn {
+            cursor: pointer;
+            user-select: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+
+    <div id="loading-overlay" class="fixed inset-0 bg-white bg-opacity-75 flex flex-col items-center justify-center z-50">
+        <div class="loader"></div>
+        <p class="mt-4 text-gray-600">데이터를 불러오는 중...</p>
+    </div>
+
+    <div class="w-full max-w-lg mx-auto bg-white rounded-2xl shadow-lg p-6 space-y-6">
+        <!-- 앱 제목 -->
+        <header class="text-center">
+            <h1 class="text-2xl font-bold text-gray-800">간편 출석체크</h1>
+            <p class="text-sm text-gray-500">교외 활동용 출석 확인</p>
+        </header>
+
+        <!-- 초기 설정 화면 -->
+        <div id="setup-screen">
+            <div class="space-y-4">
+                <label for="student-names" class="block text-md font-medium text-gray-700">학생 명단 입력</label>
+                <textarea id="student-names" rows="10" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="학생 이름을 한 줄에 한 명씩 입력하세요.&#10;예:&#10;홍길동&#10;김철수&#10;이영희"></textarea>
+                <button id="start-btn" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105">
+                    출석체크 시작
+                </button>
+            </div>
+        </div>
+
+        <!-- 메인 출석체크 화면 -->
+        <div id="main-screen" class="hidden">
+            <!-- 대시보드 -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center mb-6">
+                <div class="bg-blue-100 text-blue-800 p-3 rounded-lg"><p class="text-sm font-medium">전체</p><p id="total-students" class="text-2xl font-bold">0</p></div>
+                <div class="bg-green-100 text-green-800 p-3 rounded-lg"><p class="text-sm font-medium">출석</p><p id="present-students" class="text-2xl font-bold">0</p></div>
+                <div class="bg-red-100 text-red-800 p-3 rounded-lg"><p class="text-sm font-medium">결석</p><p id="absent-students" class="text-2xl font-bold">0</p></div>
+                <div class="bg-gray-100 text-gray-800 p-3 rounded-lg"><p class="text-sm font-medium">미확인</p><p id="unknown-students" class="text-2xl font-bold">0</p></div>
+            </div>
+
+            <!-- 정렬 헤더 -->
+            <div class="flex items-center text-sm font-semibold text-gray-600 px-3 py-2 border-b-2">
+                <div id="sort-by-name" class="sort-btn flex items-center basis-2/5">
+                    <span>이름</span>
+                    <span id="name-sort-indicator" class="ml-1"></span>
+                </div>
+                <div id="sort-by-status" class="sort-btn flex items-center basis-2/5 justify-center">
+                    <span>현황</span>
+                    <span id="status-sort-indicator" class="ml-1"></span>
+                </div>
+                <div class="basis-1/5 text-center">메모</div>
+            </div>
+
+            <!-- 학생 명단 -->
+            <div id="student-list-container" class="space-y-1 max-h-[24rem] overflow-y-auto pr-2 mt-2">
+                <!-- 학생 목록이 여기에 동적으로 추가됩니다. -->
+            </div>
+
+            <!-- 컨트롤 버튼 -->
+            <div class="mt-6 space-y-3">
+                <button id="copy-btn" class="w-full bg-indigo-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition">기록 복사하기</button>
+                <button id="reset-btn" class="w-full bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition">초기화</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 초기화 확인 모달 -->
+    <div id="reset-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-20">
+        <div class="bg-white p-5 rounded-lg shadow-xl m-4 max-w-sm w-full">
+            <div class="text-center">
+                <h3 class="text-lg font-medium leading-6 text-gray-900">정말 초기화하시겠습니까?</h3>
+                <div class="mt-2 px-7 py-3"><p class="text-sm text-gray-500">현재 출석 정보가 모두 삭제되고, 새 명단을 입력하는 화면으로 돌아갑니다.</p></div>
+                <div class="items-center px-4 py-3 flex justify-center gap-4">
+                    <button id="confirm-reset-btn" class="px-4 py-2 bg-red-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300">초기화</button>
+                    <button id="cancel-reset-btn" class="px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md w-full shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300">취소</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Firebase SDK 가져오기
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase 설정
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-attendance-app';
+
+        // Firebase 앱 초기화
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // UI 요소
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const setupScreen = document.getElementById('setup-screen');
+        const mainScreen = document.getElementById('main-screen');
+        const studentNamesInput = document.getElementById('student-names');
+        const startBtn = document.getElementById('start-btn');
+        const studentListContainer = document.getElementById('student-list-container');
+        const totalStudentsEl = document.getElementById('total-students');
+        const presentStudentsEl = document.getElementById('present-students');
+        const absentStudentsEl = document.getElementById('absent-students');
+        const unknownStudentsEl = document.getElementById('unknown-students');
+        const resetBtn = document.getElementById('reset-btn');
+        const copyBtn = document.getElementById('copy-btn');
+        const resetModal = document.getElementById('reset-modal');
+        const confirmResetBtn = document.getElementById('confirm-reset-btn');
+        const cancelResetBtn = document.getElementById('cancel-reset-btn');
+        const sortByNameBtn = document.getElementById('sort-by-name');
+        const sortByStatusBtn = document.getElementById('sort-by-status');
+        const nameSortIndicator = document.getElementById('name-sort-indicator');
+        const statusSortIndicator = document.getElementById('status-sort-indicator');
+        
+        let currentUserId = null;
+        let attendanceDocRef = null;
+        let unsubscribe = null;
+        let currentStudents = [];
+        let sortKey = 'name';
+        let sortDirection = 'asc';
+        let isAuthReady = false;
+
+        // 사용자 인증
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                if (!isAuthReady) {
+                    currentUserId = user.uid;
+                    attendanceDocRef = doc(db, 'artifacts', appId, 'users', currentUserId, 'attendance', 'data');
+                    listenForData();
+                    isAuthReady = true;
+                }
+            } else {
+                signInAnonymously(auth).catch(console.error);
+            }
+        });
+        
+        // 데이터 변경 감지
+        function listenForData() {
+            if (unsubscribe) unsubscribe();
+            unsubscribe = onSnapshot(attendanceDocRef, (docSnap) => {
+                loadingOverlay.classList.add('hidden');
+                if (docSnap.exists()) {
+                    currentStudents = docSnap.data().students || [];
+                    renderMainScreen();
+                } else {
+                    currentStudents = [];
+                    renderSetupScreen();
+                }
+            }, (error) => {
+                console.error("데이터 수신 오류:", error);
+            });
+        }
+
+        // 초기 설정 화면 렌더링
+        function renderSetupScreen() {
+            mainScreen.classList.add('hidden');
+            setupScreen.classList.remove('hidden');
+            studentNamesInput.value = '';
+        }
+
+        // 메인 화면 렌더링
+        function renderMainScreen() {
+            setupScreen.classList.add('hidden');
+            mainScreen.classList.remove('hidden');
+            updateDashboard(currentStudents);
+            renderStudentList();
+        }
+
+        // 대시보드 업데이트
+        function updateDashboard(students) {
+            totalStudentsEl.textContent = students.length;
+            presentStudentsEl.textContent = students.filter(s => s.status === 'present').length;
+            absentStudentsEl.textContent = students.filter(s => s.status === 'absent').length;
+            unknownStudentsEl.textContent = students.filter(s => s.status !== 'present' && s.status !== 'absent').length;
+        }
+        
+        // 학생 목록 렌더링
+        function renderStudentList() {
+            studentListContainer.innerHTML = '';
+            
+            nameSortIndicator.textContent = sortKey === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : '';
+            statusSortIndicator.textContent = sortKey === 'status' ? (sortDirection === 'asc' ? '▲' : '▼') : '';
+
+            const sortedStudents = [...currentStudents].sort((a, b) => {
+                if (sortKey === 'name') return a.name.localeCompare(b.name, 'ko');
+                if (sortKey === 'status') {
+                    const statusOrder = { present: 0, absent: 1, unknown: 2 };
+                    return (statusOrder[a.status] ?? 2) - (statusOrder[b.status] ?? 2);
+                }
+                return 0;
+            });
+
+            if (sortDirection === 'desc') sortedStudents.reverse();
+
+            if (sortedStudents.length === 0) {
+                studentListContainer.innerHTML = '<p class="text-center text-gray-500">학생 명단이 비어있습니다.</p>';
+                return;
+            }
+
+            sortedStudents.forEach((student) => {
+                const originalIndex = currentStudents.findIndex(s => s.name === student.name);
+                const studentRow = document.createElement('div');
+                const statusStyles = {
+                    present: { bg: 'bg-green-50', text: 'text-green-800', btn: 'bg-green-500 hover:bg-green-600', label: '출석' },
+                    absent: { bg: 'bg-red-50', text: 'text-red-800', btn: 'bg-red-500 hover:bg-red-600', label: '결석' },
+                    unknown: { bg: 'bg-gray-100', text: 'text-gray-800', btn: 'bg-gray-400 hover:bg-gray-500', label: '모름' }
+                };
+                const style = statusStyles[student.status] || statusStyles.unknown;
+
+                studentRow.className = `flex items-center p-2 rounded-lg transition-colors ${style.bg}`;
+                studentRow.innerHTML = `
+                    <span class="basis-2/5 font-medium truncate pr-2 ${style.text}">${student.name}</span>
+                    <button class="basis-2/5 px-2 py-1 text-sm font-semibold rounded-full text-white transition ${style.btn}" data-index="${originalIndex}">
+                        ${style.label}
+                    </button>
+                    <input type="text" placeholder="메모..." value="${student.memo || ''}" 
+                           class="basis-1/5 ml-2 p-1 text-sm border border-gray-200 rounded-md focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
+                           data-index="${originalIndex}">
+                `;
+                studentListContainer.appendChild(studentRow);
+            });
+        }
+
+        studentListContainer.addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON') {
+                toggleAttendanceStatus(parseInt(e.target.dataset.index));
+            }
+        });
+
+        studentListContainer.addEventListener('blur', (e) => {
+            if (e.target.tagName === 'INPUT') {
+                updateMemo(parseInt(e.target.dataset.index), e.target.value);
+            }
+        }, true);
+
+        function toggleAttendanceStatus(index) {
+            const updatedStudents = [...currentStudents];
+            const currentStatus = updatedStudents[index].status;
+            const nextStatus = { 'unknown': 'present', 'present': 'absent', 'absent': 'unknown' }[currentStatus] || 'unknown';
+            updatedStudents[index].status = nextStatus;
+            updateFirestore(updatedStudents);
+        }
+
+        function updateMemo(index, memo) {
+            const updatedStudents = [...currentStudents];
+            if (updatedStudents[index].memo !== memo) {
+                updatedStudents[index].memo = memo;
+                updateFirestore(updatedStudents);
+            }
+        }
+        
+        // Firestore 데이터 업데이트 (리스너 분리/재연결로 안정성 확보)
+        async function updateFirestore(students) {
+            if (unsubscribe) {
+                unsubscribe();
+                unsubscribe = null;
+            }
+            try {
+                await setDoc(attendanceDocRef, { students });
+            } catch (error) {
+                console.error("데이터 업데이트 실패:", error);
+                alert("업데이트에 실패했습니다. 잠시 후 다시 시도해주세요.");
+            } finally {
+                listenForData();
+            }
+        }
+
+        startBtn.addEventListener('click', async () => {
+            const names = studentNamesInput.value.split('\n').map(name => name.trim()).filter(name => name);
+            if (names.length === 0) {
+                alert('학생 이름을 한 명 이상 입력해주세요.');
+                return;
+            }
+            const students = names.map(name => ({ name: name, status: 'unknown', memo: '' }));
+            loadingOverlay.classList.remove('hidden');
+            await updateFirestore(students);
+        });
+        
+        copyBtn.addEventListener('click', () => {
+            const presentList = [], absentList = [], unknownList = [];
+            currentStudents.forEach(student => {
+                let entry = student.name;
+                if (student.memo) entry += `(${student.memo})`;
+                if (student.status === 'present') presentList.push(entry);
+                else if (student.status === 'absent') absentList.push(entry);
+                else unknownList.push(entry);
+            });
+
+            let report = `[출석체크 결과 - ${new Date().toLocaleString('ko-KR')}]\n\n`;
+            if (presentList.length > 0) report += `[출석자 명단]\n${presentList.join('\n')}\n\n`;
+            if (absentList.length > 0) report += `[결석자 명단]\n${absentList.join('\n')}\n\n`;
+            if (unknownList.length > 0) report += `[미확인 명단]\n${unknownList.join('\n')}\n`;
+
+            const textArea = document.createElement('textarea');
+            textArea.value = report.trim();
+            document.body.appendChild(textArea);
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                copyBtn.textContent = '복사 완료!';
+                copyBtn.classList.replace('bg-indigo-500', 'bg-green-500');
+            } catch (err) {
+                copyBtn.textContent = '복사 실패';
+                copyBtn.classList.replace('bg-indigo-500', 'bg-red-500');
+            } finally {
+                document.body.removeChild(textArea);
+                setTimeout(() => {
+                    copyBtn.textContent = '기록 복사하기';
+                    copyBtn.classList.replace('bg-green-500', 'bg-indigo-500');
+                    copyBtn.classList.replace('bg-red-500', 'bg-indigo-500');
+                }, 2000);
+            }
+        });
+
+        function handleSort(key) {
+            if (sortKey === key) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortKey = key;
+                sortDirection = 'asc';
+            }
+            renderStudentList();
+        }
+        sortByNameBtn.addEventListener('click', () => handleSort('name'));
+        sortByStatusBtn.addEventListener('click', () => handleSort('status'));
+
+        resetBtn.addEventListener('click', () => resetModal.classList.remove('hidden'));
+        cancelResetBtn.addEventListener('click', () => resetModal.classList.add('hidden'));
+        confirmResetBtn.addEventListener('click', async () => {
+            resetModal.classList.add('hidden');
+            loadingOverlay.classList.remove('hidden');
+            try {
+                await deleteDoc(attendanceDocRef);
+            } catch (error) {
+                console.error("초기화 실패:", error);
+                alert("초기화에 실패했습니다.");
+            } finally {
+                loadingOverlay.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
